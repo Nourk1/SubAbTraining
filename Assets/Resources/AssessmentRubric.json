@@ -1,0 +1,20 @@
+{
+  "version": "draft-1",
+  "status": "Provisional - awaiting healthcare faculty review",
+  "minimumLearnerTurns": 3,
+  "minimumPatientTurns": 2,
+  "scale": {
+    "0": "Clearly counterproductive communication demonstrated in the transcript; never assign zero merely because evidence or opportunity is missing.",
+    "1": "Substantial difficulty across relevant opportunities, supported by observed statements or responses.",
+    "2": "Developing skill: mixed performance, with relevant missed opportunities or inconsistent use.",
+    "3": "Effective communication across available opportunities, with minor room for improvement.",
+    "4": "Consistently skillful communication across multiple relevant opportunities; cite at least two distinct learner turns."
+  },
+  "categories": [
+    {"id":"empathy_respect","label":"Empathy and Respect","weight":20,"criterion":"Recognizes expressed feelings, acknowledges concerns, and treats the patient respectfully. Evaluate the learner response in the context of the patient's preceding statements."},
+    {"id":"active_listening","label":"Active Listening","weight":20,"criterion":"Responds to what the patient actually said, reflects or summarizes meaning, and checks understanding. Text cannot establish interruptions, silence, eye contact, or vocal tone."},
+    {"id":"motivational_interviewing","label":"Motivational Interviewing","weight":20,"criterion":"Explores the patient's perspective and readiness, asks permission before advice, supports autonomy, and collaborates on next steps when appropriate. Do not reward persuasion or patient agreement alone."},
+    {"id":"nonjudgmental_language","label":"Nonjudgmental Communication","weight":20,"criterion":"Uses respectful language without blame, stigmatizing labels, threats, or moral judgments. Evaluate wording and context rather than relying on isolated keywords."},
+    {"id":"clarity","label":"Clarity of Communication","weight":20,"criterion":"Uses understandable questions and explanations, avoids confusing or overloaded wording, and checks shared understanding when appropriate. Do not grade accent, grammar, speech-recognition errors, or clinical correctness."}
+  ]
+}

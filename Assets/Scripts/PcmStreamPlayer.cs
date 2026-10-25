@@ -48,6 +48,7 @@ namespace RealtimePatient
 
         private void Awake()
         {
+            if (realtimeClient == null) realtimeClient = FindFirstObjectByType<OpenAIRealtimeClient>();
             if (audioSource == null)
                 audioSource = GetComponent<AudioSource>();
 
@@ -216,7 +217,7 @@ namespace RealtimePatient
             // Required by AudioClip.Create streaming callback.
         }
 
-        private void StopAndClear()
+        public void StopAndClear()
         {
             emptyQueueSince = -1f;
             if (audioSource != null)
@@ -230,6 +231,11 @@ namespace RealtimePatient
             responseFinished = false;
             playbackStarted = false;
             IsResponseActive = false;
+        }
+
+        private void OnDestroy()
+        {
+            if (streamingClip != null) Destroy(streamingClip);
         }
     }
 }

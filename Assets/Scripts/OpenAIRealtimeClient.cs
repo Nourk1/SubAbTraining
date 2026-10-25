@@ -20,6 +20,7 @@ namespace RealtimePatient
         [Header("Connection")]
         [SerializeField] private string model = "gpt-realtime-2.1";
         [SerializeField] private string voice = "marin";
+        [SerializeField] private string transcriptionModel = "gpt-transcribe";
 
         [Tooltip("For local prototypes only. Prefer the OPENAI_API_KEY environment variable.")]
         [SerializeField] private string developmentApiKey = "";
@@ -45,11 +46,21 @@ namespace RealtimePatient
         public event Action<string> OutputTranscriptDelta;
         public event Action<string> ErrorReceived;
         public event Action<string> StatusChanged;
+        public event Action ResponseStarted;
+        public event Action ResponseFinished;
+        public event Action<TranscriptSignal> TranscriptReceived;
         private TaskCompletionSource<bool> pendingCommit;
-        private bool commitFailed;
+        public bool ConnectOnStart { get; set; } = true;
 
         private WebSocket websocket;
         private bool sessionConfigured;
+        public bool IsResponsePending { get; private set; }
+
+        public void SetPatientInstructions(string instructions)
+        {
+            if (websocket != null) throw new InvalidOperationException("Disconnect before changing the patient profile.");
+            avatarInstructions = instructions;
+        }
 
         public bool IsConnected =>
             websocket != null &&
@@ -59,7 +70,7 @@ namespace RealtimePatient
         private async void Start()
         {
             Application.runInBackground = true;
-            await ConnectAsync();
+            if (ConnectOnStart) await ConnectAsync();
         }
 
         public async Task ConnectAsync()
@@ -71,7 +82,7 @@ namespace RealtimePatient
                 return;
             }
 
-            string apiKey = "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";
+            string apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
 
             if (string.IsNullOrWhiteSpace(apiKey))
                 apiKey = developmentApiKey?.Trim();
@@ -96,24 +107,34 @@ namespace RealtimePatient
             };
 
             websocket = new WebSocket(url, headers);
+            WebSocket connection = websocket;
 
             websocket.OnOpen += () =>
             {
+                if (!ReferenceEquals(websocket, connection)) return;
                 StatusChanged?.Invoke("WebSocket connected; configuring patient.");
                 _ = ConfigureSessionAsync();
             };
 
-            websocket.OnMessage += HandleMessage;
+            websocket.OnMessage += bytes =>
+            {
+                if (ReferenceEquals(websocket, connection)) HandleMessage(bytes);
+            };
 
             websocket.OnError += error =>
             {
+                if (!ReferenceEquals(websocket, connection)) return;
                 sessionConfigured = false;
+                IsResponsePending = false;
                 ReportError("WebSocket error: " + error);
             };
 
             websocket.OnClose += code =>
             {
+                if (!ReferenceEquals(websocket, connection)) return;
                 sessionConfigured = false;
+                IsResponsePending = false;
+                pendingCommit?.TrySetResult(false);
                 StatusChanged?.Invoke("WebSocket closed: " + code);
                 Disconnected?.Invoke();
             };
@@ -122,11 +143,12 @@ namespace RealtimePatient
 
             try
             {
-                await websocket.Connect();
+                await connection.Connect();
             }
             catch (Exception exception)
             {
-                ReportError("Connection failed: " + exception.Message);
+                if (ReferenceEquals(websocket, connection))
+                    ReportError("Connection failed: " + exception.Message);
             }
         }
 
@@ -149,7 +171,8 @@ namespace RealtimePatient
                                 ["type"] = "audio/pcm",
                                 ["rate"] = 24000
                             },
-                            ["turn_detection"] = JValue.CreateNull()
+                            ["turn_detection"] = JValue.CreateNull(),
+                            ["transcription"] = new JObject { ["model"] = transcriptionModel }
                         },
                         ["output"] = new JObject
                         {
@@ -167,16 +190,16 @@ namespace RealtimePatient
             await SendJsonAsync(payload);
         }
 
-        public async Task ClearInputAudioAsync()
+        public async Task<bool> ClearInputAudioAsync()
         {
-            await SendEventAsync("input_audio_buffer.clear");
+            return await SendEventAsync("input_audio_buffer.clear");
         }
 
 
-        public async Task AppendInputAudioAsync(byte[] pcm16Bytes)
+        public async Task<bool> AppendInputAudioAsync(byte[] pcm16Bytes)
         {
             if (pcm16Bytes == null || pcm16Bytes.Length == 0)
-                return;
+                return false;
 
             var payload = new JObject
             {
@@ -184,7 +207,7 @@ namespace RealtimePatient
                 ["audio"] = Convert.ToBase64String(pcm16Bytes)
             };
 
-            await SendJsonAsync(payload);
+            return await SendJsonAsync(payload);
         }
 
         public async Task<bool> CommitInputAudioAsync()
@@ -257,12 +280,35 @@ namespace RealtimePatient
 
         public async Task CreateResponseAsync()
         {
-            await SendEventAsync("response.create");
+            if (!IsConnected || IsResponsePending) return;
+            IsResponsePending = true;
+            if (!await SendEventAsync("response.create")) IsResponsePending = false;
         }
 
         public async Task CancelResponseAsync()
         {
             await SendEventAsync("response.cancel");
+        }
+
+        public async Task DisconnectAsync()
+        {
+            WebSocket connection = websocket;
+            websocket = null; // Ignore queued callbacks from the previous attempt.
+            sessionConfigured = false;
+            IsResponsePending = false;
+            pendingCommit?.TrySetResult(false);
+            if (connection != null)
+            {
+#if !UNITY_WEBGL || UNITY_EDITOR
+                if (connection.State == WebSocketState.Connecting)
+                {
+                    connection.CancelConnection();
+                    return;
+                }
+#endif
+                try { await connection.Close(); }
+                catch (Exception exception) { Debug.LogWarning("WebSocket close failed: " + exception.Message); }
+            }
         }
 
         private Task<bool> SendEventAsync(string eventType)
@@ -361,11 +407,33 @@ namespace RealtimePatient
                     string delta = message.Value<string>("delta");
                     if (!string.IsNullOrEmpty(delta))
                         OutputTranscriptDelta?.Invoke(delta);
+                    EmitTranscript(message, TranscriptEventKind.PatientDelta, delta);
                     break;
                 }
 
+                case "response.output_item.added":
+                    if (message["item"]?["role"]?.Value<string>() == "assistant")
+                        TranscriptReceived?.Invoke(new TranscriptSignal { Kind = TranscriptEventKind.PatientStarted,
+                            ItemId = message["item"]?["id"]?.Value<string>() });
+                    break;
+
+                case "response.output_audio_transcript.done":
+                    EmitTranscript(message, TranscriptEventKind.PatientFinal, message.Value<string>("transcript"));
+                    break;
+
+                case "conversation.item.input_audio_transcription.completed":
+                    EmitTranscript(message, TranscriptEventKind.LearnerFinal, message.Value<string>("transcript"));
+                    break;
+
+                case "conversation.item.input_audio_transcription.failed":
+                    EmitTranscript(message, TranscriptEventKind.LearnerFailed, null);
+                    StatusChanged?.Invoke("Learner transcription unavailable for one turn. Voice practice can continue.");
+                    break;
+
                 case "error":
                     {
+                        IsResponsePending = false;
+                        OutputAudioDone?.Invoke();
                         string errorMessage =
                             message["error"]?["message"]?.Value<string>()
                             ?? message.ToString(Formatting.Indented);
@@ -385,6 +453,11 @@ namespace RealtimePatient
 
 
                 case "response.done":
+                    IsResponsePending = false;
+                    OutputAudioDone?.Invoke();
+                    if (message["response"]?["status"]?.Value<string>() == "failed")
+                        ReportError("Patient response failed: " + message["response"]?["status_details"]?.ToString());
+                    ResponseFinished?.Invoke();
                     break;
                    
 
@@ -393,6 +466,7 @@ namespace RealtimePatient
 
                 case "input_audio_buffer.committed":
                     {
+                        EmitTranscript(message, TranscriptEventKind.LearnerCommitted, null);
                         Debug.Log(
                             "Server accepted the input audio buffer.");
 
@@ -406,9 +480,24 @@ namespace RealtimePatient
                     }
 
                 case "response.created":
-                    StatusChanged?.Invoke(type);
+                    IsResponsePending = true;
+                    ResponseStarted?.Invoke();
+                    StatusChanged?.Invoke("Patient is responding...");
                     break;
             }
+        }
+
+        private void Update()
+        {
+#if !UNITY_WEBGL || UNITY_EDITOR
+            websocket?.DispatchMessageQueue();
+#endif
+        }
+
+        private void EmitTranscript(JObject message, TranscriptEventKind kind, string text)
+        {
+            TranscriptReceived?.Invoke(new TranscriptSignal { Kind = kind,
+                ItemId = message.Value<string>("item_id"), Text = text });
         }
 
         private void ReportError(string message)
@@ -420,17 +509,7 @@ namespace RealtimePatient
 
         private async void OnDestroy()
         {
-            if (websocket == null)
-                return;
-
-            try
-            {
-                await websocket.Close();
-            }
-            catch (Exception exception)
-            {
-                Debug.LogWarning("WebSocket close failed: " + exception.Message);
-            }
+            await DisconnectAsync();
         }
     }
 }
