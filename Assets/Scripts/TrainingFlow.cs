@@ -66,6 +66,8 @@ namespace RealtimePatient
             // Populate the final tree after that initial lifecycle has completed.
             yield return null;
             root = document.rootVisualElement;
+            var menuStyles = Resources.Load<StyleSheet>("MenuNavigation");
+            if (menuStyles != null) root.styleSheets.Add(menuStyles);
             root.style.position = Position.Absolute;
             root.style.left = 0;
             root.style.right = 0;
@@ -79,7 +81,7 @@ namespace RealtimePatient
             Menu();
         }
 
-        private void Page(string title, string subtitle, bool scrollable = true)
+        private void Page(string title, string subtitle, bool scrollable = true, bool showHeader = true)
         {
             CloseNavigationPrompt();
             sessionVisible = false;
@@ -95,30 +97,74 @@ namespace RealtimePatient
             if (patientPreview != null) patientPreview.Hide();
             if (menuGuide != null) menuGuide.Hide();
             root.Clear();
-            var header = new VisualElement();
-            header.style.backgroundColor = teal;
-            header.style.paddingLeft = 36; header.style.paddingTop = 20;
-            header.style.paddingBottom = 20;
-            var brand = new Label("PATRICIA  /  PATIENT COMMUNICATION TRAINING");
-            brand.style.color = Color.white;
-            brand.style.unityFontStyleAndWeight = FontStyle.Bold;
-            header.Add(brand); root.Add(header);
+            root.style.backgroundImage = new StyleBackground(Resources.Load<Texture2D>("MenuCorridorBackground"));
+            root.style.backgroundSize = new BackgroundSize(BackgroundSizeType.Cover);
+            root.style.backgroundColor = Color.white;
+            var view = new VisualElement();
+            view.style.flexGrow = 1; view.style.minHeight = 0;
+            if (showHeader)
+            {
+                view.AddToClassList("menu-view");
+            }
+            root.Add(view);
+            if (showHeader)
+            {
+                var header = new VisualElement();
+                header.style.backgroundColor = Color.clear;
+                header.style.paddingLeft = 36; header.style.paddingTop = 20;
+                header.style.paddingBottom = 20;
+                var brand = new Label("PATRICIA  /  PATIENT COMMUNICATION TRAINING");
+                brand.style.color = ink;
+                brand.style.unityFontStyleAndWeight = FontStyle.Bold;
+                header.Add(brand); view.Add(header);
+            }
             VisualElement body = scrollable ? new ScrollView() : new VisualElement();
+            if (body is ScrollView menuScroll) ConfigureMenuScroll(menuScroll);
             body.style.flexGrow = 1;
             body.style.minHeight = 0;
             body.style.paddingLeft = 36; body.style.paddingRight = 36;
             body.style.paddingTop = 28; body.style.paddingBottom = 28;
-            root.Add(body);
+            view.Add(body);
             content = body.contentContainer;
             if (!scrollable) content.style.flexGrow = 1;
-            Text(content, title, 34, true);
-            Text(content, subtitle, 18);
+            if (showHeader)
+            {
+                Text(content, title, 34, true);
+                Text(content, subtitle, 18);
+            }
         }
         private VisualElement content;
+        private void ConfigureMenuScroll(ScrollView scroll)
+        {
+            scroll.AddToClassList("menu-scroll");
+            scroll.mode = ScrollViewMode.Vertical;
+            scroll.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
+            void RefreshVisibleText()
+            {
+                var viewport = scroll.contentViewport.worldBound;
+                if (viewport.width <= 0 || viewport.height <= 0) return;
+                scroll.contentContainer.Query<Label>(className: "scroll-reveal-text").ForEach(label =>
+                {
+                    // Nested scroll views manage their own content independently.
+                    if (label.GetFirstAncestorOfType<ScrollView>() != scroll) return;
+                    label.AddToClassList("scroll-reveal-managed");
+                    bool visible = label.worldBound.Overlaps(viewport);
+                    // Opacity preserves layout and leaves scrolling and controls responsive.
+                    label.EnableInClassList("scroll-reveal-visible", visible);
+                });
+            }
+            scroll.verticalScroller.valueChanged += _ => RefreshVisibleText();
+            scroll.horizontalScroller.valueChanged += _ => RefreshVisibleText();
+            scroll.RegisterCallback<GeometryChangedEvent>(_ => RefreshVisibleText());
+            // Also discover content added later (saved results, foldouts, and live feedback).
+            // UI Toolkit suspends scheduled work when this view is detached.
+            scroll.schedule.Execute(RefreshVisibleText).Every(80);
+        }
 
         private void Text(VisualElement parent, string text, int size = 18, bool bold = false)
         {
             var label = new Label(text);
+            label.AddToClassList("scroll-reveal-text");
             label.style.fontSize = size;
             label.style.whiteSpace = WhiteSpace.Normal;
             label.style.marginBottom = 14;
@@ -128,7 +174,7 @@ namespace RealtimePatient
         private VisualElement Card(VisualElement parent)
         {
             var card = new VisualElement();
-            card.style.backgroundColor = Color.white;
+            card.style.backgroundColor = new Color(1f, 1f, 1f, 0.22f);
             card.style.paddingLeft = 24; card.style.paddingRight = 24;
             card.style.paddingTop = 24; card.style.paddingBottom = 24;
             card.style.marginBottom = 18;
@@ -138,56 +184,54 @@ namespace RealtimePatient
         }
         private Button Action(VisualElement parent, string title, System.Action click)
         {
+            var button = MenuAction(parent, title, click);
+            button.AddToClassList("menu-action-compact");
+            return button;
+        }
+        private void StyleMenuButton(Button button)
+        {
+            button.AddToClassList("menu-action");
+            var depth = new VisualElement { pickingMode = PickingMode.Ignore };
+            depth.AddToClassList("menu-action-depth");
+            button.Add(depth);
+        }
+        private Button MenuAction(VisualElement parent, string title, System.Action click)
+        {
             var button = new Button(click) { text = title };
-            button.style.backgroundColor = teal; button.style.color = Color.white;
-            button.style.height = 48; button.style.marginBottom = 10;
-            button.style.fontSize = 18;
+            StyleMenuButton(button);
             parent.Add(button);
             return button;
         }
         private void Menu()
         {
-            Page("Every conversation is a chance to connect.",
-                "Practice compassionate communication in a space designed for learning.");
-            var row = new VisualElement(); row.style.flexDirection = FlexDirection.Row;
-            row.style.flexWrap = Wrap.Wrap; content.Add(row);
-            var welcome = Card(row); welcome.style.flexGrow = 1; welcome.style.flexBasis = Length.Percent(52);
-            welcome.style.minWidth = 360; welcome.style.marginRight = 24;
-            Text(welcome, "Welcome to PATRICIA", 26, true);
-            Text(welcome, "Explore realistic patient situations, build confidence, and reflect on your approach.");
-            Text(welcome, "6 conversation scenarios  |  3 difficulty levels", 16, true);
-            var start = Action(welcome, "Start Training", () => { selected = 0; Briefing(); });
-            var chapters = Action(welcome, "Select Chapter", Chapters);
-            var progress = Action(welcome, "View Progress", Progress);
-            var settings = Action(welcome, "Settings", Settings);
-            Text(welcome, "Practice at your own pace. You can review a chapter before starting the conversation.", 16);
-            var guide = Card(row); guide.style.flexGrow = 1; guide.style.flexBasis = Length.Percent(40);
-            guide.style.minWidth = 340;
-            Text(guide, "Your practice guide", 24, true);
+            Page(null, null, false, false);
+            root.style.backgroundColor = Color.white;
+            root.style.backgroundImage = new StyleBackground(Resources.Load<Texture2D>("MenuCorridorBackground"));
+            root.style.backgroundSize = new BackgroundSize(BackgroundSizeType.Cover);
+            content.style.paddingLeft = 0; content.style.paddingRight = 0;
+            content.style.paddingTop = 0; content.style.paddingBottom = 0;
+            var guide = new VisualElement();
+            guide.style.position = Position.Absolute;
+            guide.style.left = 0; guide.style.right = 0; guide.style.top = 0; guide.style.bottom = 0;
+            guide.style.flexGrow = 1; guide.style.flexBasis = 0; guide.style.minHeight = 0;
+            guide.style.overflow = Overflow.Hidden;
+            content.Add(guide);
             if (menuGuide == null) menuGuide = gameObject.AddComponent<MenuGuidePresenter>();
             if (!menuGuide.Show(guide, menuGuidePrefab))
-                Text(guide, "The guide is being prepared. Stop Play and choose Capstone > Create Menu Guide Assets, then press Play again.", 16);
-            var greeting = new Label("Hi, welcome! Choose a chapter, take your time, and use each conversation as a chance to learn.");
-            greeting.style.whiteSpace = WhiteSpace.Normal; greeting.style.fontSize = 19;
-            greeting.style.minHeight = 75; greeting.style.marginTop = 16; greeting.style.marginBottom = 12;
-            greeting.style.color = ink; guide.Add(greeting);
-            System.Action<string> explain = message => { greeting.text = message; menuGuide.Wave(); };
-            var help = new VisualElement(); help.style.flexDirection = FlexDirection.Row; help.style.flexWrap = Wrap.Wrap;
-            guide.Add(help);
-            var how = Action(help, "Getting started", () => explain("Select Chapter lets you choose a situation and difficulty. Read the briefing, enter training, then connect the character when you're ready."));
-            var feedback = Action(help, "About feedback", () => explain("The checklist tracks communication steps. Brief coaching appears between turns. Your final review explains results using quotes from your conversation."));
-            var history = Action(help, "My results", () => explain("View Progress opens your saved attempts. You can revisit feedback, compare matching attempts, or delete a saved conversation."));
-            foreach (var button in new[] { how, feedback, history })
-            { button.style.fontSize = 14; button.style.height = 36; button.style.flexGrow = 1; }
-            MenuHint(start, greeting, "Start Training opens the first chapter's briefing. You choose when to connect and speak.");
-            MenuHint(chapters, greeting, "Choose from six patient and family conversations, with beginner, intermediate, and advanced difficulty.");
-            MenuHint(progress, greeting, "Revisit saved conversations and compare your practice attempts on this device.");
-            MenuHint(settings, greeting, "Adjust your available training preferences before you begin.");
-        }
-        private void MenuHint(Button button, Label greeting, string message)
-        {
-            button.RegisterCallback<PointerEnterEvent>(_ => greeting.text = message);
-            button.RegisterCallback<FocusInEvent>(_ => greeting.text = message);
+                Debug.LogWarning("Menu guide unavailable. Choose Capstone > Create Menu Guide Assets to prepare it.");
+            var navigation = new VisualElement(); navigation.style.flexDirection = FlexDirection.Row;
+            navigation.style.position = Position.Absolute;
+            navigation.style.left = 36; navigation.style.right = 36; navigation.style.bottom = 28;
+            navigation.style.flexShrink = 0; content.Add(navigation);
+            var start = MenuAction(navigation, "Start Training", () => { selected = 0; Briefing(); });
+            var chapters = MenuAction(navigation, "Select Chapter", Chapters);
+            var progress = MenuAction(navigation, "View Progress", Progress);
+            var settings = MenuAction(navigation, "Settings", Settings);
+            foreach (var button in new[] { start, chapters, progress, settings })
+            {
+                button.style.flexGrow = 1; button.style.flexBasis = 0; button.style.minWidth = 0;
+                button.style.marginLeft = 4; button.style.marginRight = 4;
+            }
         }
         private void Chapters()
         {
@@ -257,11 +301,13 @@ namespace RealtimePatient
                 voiceStatus.style.whiteSpace = WhiteSpace.Normal;
                 voiceStatus.style.fontSize = 16;
                 var statusArea = new ScrollView();
+                ConfigureMenuScroll(statusArea);
                 statusArea.style.height = 55; statusArea.style.flexShrink = 0;
                 statusArea.Add(voiceStatus); stage.Add(statusArea);
                 if (captions)
                 {
                     var captionArea = new ScrollView();
+                    ConfigureMenuScroll(captionArea);
                     captionArea.style.height = 55;
                     captionArea.style.flexShrink = 0;
                     patientCaption = new Label(Chapter.ParticipantLabel + " captions will appear here.");
@@ -270,12 +316,16 @@ namespace RealtimePatient
                     captionArea.Add(patientCaption); stage.Add(captionArea);
                 }
                 connectButton = new Button(() => conversation.Begin(Chapter, difficulty)) { text = "Connect " + Chapter.ParticipantLabel };
+                StyleMenuButton(connectButton);
+                connectButton.AddToClassList("menu-action-compact");
                 var controls = new VisualElement(); controls.style.flexDirection = FlexDirection.Row;
                 controls.style.flexShrink = 0;
                 stage.Add(controls);
                 connectButton.style.height = 40; connectButton.style.flexGrow = 1;
                 controls.Add(connectButton);
                 speakButton = new Button { text = "Hold to Speak (or hold Ctrl)" };
+                StyleMenuButton(speakButton);
+                speakButton.AddToClassList("menu-action-compact");
                 speakButton.style.height = 40;
                 speakButton.style.flexGrow = 2;
                 speakButton.SetEnabled(false);
@@ -304,6 +354,7 @@ namespace RealtimePatient
             objectiveStatus.style.fontSize = 14;
             checklist.Add(objectiveStatus);
             var objectiveList = new ScrollView();
+            ConfigureMenuScroll(objectiveList);
             objectiveList.style.flexGrow = 1; objectiveList.style.minHeight = 0;
             checklist.Add(objectiveList);
             foreach (TrainingObjective objective in Chapter.objectives)
@@ -338,6 +389,7 @@ namespace RealtimePatient
             
             {
                 var coachingArea = new ScrollView();
+                ConfigureMenuScroll(coachingArea);
                 coachingArea.style.height = 130; coachingArea.style.flexShrink = 0;
                 coachingStatus = new Label(); coachingStatus.style.fontSize = 13;
                 coachingStatus.style.whiteSpace = WhiteSpace.Normal;
@@ -351,6 +403,8 @@ namespace RealtimePatient
             
             {
                 var retry = new Button(() => conversation.Objectives.Retry()) { text = "Retry Objective Check" };
+                StyleMenuButton(retry);
+                retry.AddToClassList("menu-action-compact");
                 retry.style.height = 30; checklist.Add(retry);
             }
             var navigation = new VisualElement(); navigation.style.flexDirection = FlexDirection.Row;
@@ -376,7 +430,7 @@ namespace RealtimePatient
             navigationPrompt.style.alignItems = Align.Center;
             navigationPrompt.style.justifyContent = Justify.Center;
             root.Add(navigationPrompt);
-            var dialog = Card(navigationPrompt); dialog.style.width = Length.Percent(80); dialog.style.maxWidth = 560;
+            var dialog = Card(navigationPrompt); dialog.style.backgroundColor = new Color(0.88f, 0.91f, 0.93f, 0.94f); dialog.style.width = Length.Percent(80); dialog.style.maxWidth = 560;
             dialog.style.flexShrink = 0;
             Text(dialog, "End this conversation?", 27, true);
             Text(dialog, "Confirming stops the microphone, character audio, and voice connection. Unsent recording is discarded; available transcript and results are saved locally.");
@@ -461,6 +515,8 @@ namespace RealtimePatient
                 Text(details, "Overall = sum of (category rating / 4 × category weight), rounded to the nearest whole number. All five ratings and a complete transcript are required.", 16);
             }
             var retry = new Button(() => assessment.Request(true)) { text = "Retry Final Assessment" };
+            StyleMenuButton(retry);
+            retry.AddToClassList("menu-action-compact");
             retry.style.height = 40; retry.SetEnabled(!assessment.IsEvaluating);
             score.Add(retry);
         }
@@ -601,7 +657,7 @@ namespace RealtimePatient
                 Action(item, "Open Saved Results", () => SavedResults(attempt));
                 var earlier = attempts.Find(a => a.Id != attempt.Id && a.StartedUtc < attempt.StartedUtc && AttemptStore.CanCompare(a, attempt));
                 if (earlier != null) Action(item, "Compare with Previous Matching Attempt", () => CompareAttempts(earlier, attempt));
-                var delete = new Button { text = "Delete Attempt" }; delete.style.height = 36;
+                var delete = new Button { text = "Delete Attempt" }; StyleMenuButton(delete); delete.AddToClassList("menu-action-compact"); delete.style.height = 36;
                 var confirmation = new VisualElement(); confirmation.style.display = DisplayStyle.None;
                 Text(confirmation, "Delete this attempt's transcript and results from this device?", 16);
                 Action(confirmation, "Yes, Delete", () => { conversation.History.Delete(attempt.Id); Progress(); });
