@@ -98,6 +98,8 @@ namespace RealtimePatient
             if (menuGuide != null) menuGuide.Hide();
             root.Clear();
             root.style.backgroundImage = new StyleBackground(Resources.Load<Texture2D>("MenuCorridorBackground"));
+            root.style.backgroundPositionX = new BackgroundPosition(BackgroundPositionKeyword.Center);
+            root.style.backgroundPositionY = new BackgroundPosition(BackgroundPositionKeyword.Center);
             root.style.backgroundSize = new BackgroundSize(BackgroundSizeType.Cover);
             root.style.backgroundColor = Color.white;
             var view = new VisualElement();
@@ -207,6 +209,8 @@ namespace RealtimePatient
             Page(null, null, false, false);
             root.style.backgroundColor = Color.white;
             root.style.backgroundImage = new StyleBackground(Resources.Load<Texture2D>("MenuCorridorBackground"));
+            root.style.backgroundPositionX = new BackgroundPosition(BackgroundPositionKeyword.Center);
+            root.style.backgroundPositionY = new BackgroundPosition(BackgroundPositionKeyword.Center);
             root.style.backgroundSize = new BackgroundSize(BackgroundSizeType.Cover);
             content.style.paddingLeft = 0; content.style.paddingRight = 0;
             content.style.paddingTop = 0; content.style.paddingBottom = 0;
@@ -233,12 +237,32 @@ namespace RealtimePatient
                 button.style.marginLeft = 4; button.style.marginRight = 4;
             }
         }
+        private void DifficultySelector(VisualElement parent, System.Action changed = null)
+        {
+            Text(parent, "Difficulty", 18, true);
+            var selector = new DropdownField(new System.Collections.Generic.List<string>
+                { "Beginner", "Intermediate", "Advanced" }, difficulty);
+            selector.AddToClassList("difficulty-dropdown");
+            var input = selector.Q<VisualElement>(className: "unity-base-field__input");
+            if (input != null)
+            {
+                input.AddToClassList("menu-action");
+                input.AddToClassList("menu-action-compact");
+                var depth = new VisualElement { pickingMode = PickingMode.Ignore };
+                depth.AddToClassList("menu-action-depth");
+                input.Add(depth);
+            }
+            selector.RegisterValueChangedCallback(evt =>
+            {
+                difficulty = evt.newValue;
+                changed?.Invoke();
+            });
+            parent.Add(selector);
+        }
         private void Chapters()
         {
             Page("Choose a conversation", "Choose a scenario, review the briefing, and begin voice practice.");
-            var level = new DropdownField("Difficulty", new System.Collections.Generic.List<string>
-                { "Beginner", "Intermediate", "Advanced" }, difficulty);
-            level.RegisterValueChangedCallback(e => difficulty = e.newValue); content.Add(level);
+            DifficultySelector(content);
             var grid = new VisualElement(); grid.style.flexDirection = FlexDirection.Row;
             grid.style.flexWrap = Wrap.Wrap; content.Add(grid);
             for (int i = 0; i < catalog.chapters.Length; i++)
@@ -262,18 +286,11 @@ namespace RealtimePatient
             if (!string.IsNullOrWhiteSpace(Chapter.PolicyNotice)) Text(profile, Chapter.PolicyNotice, 16, true);
             Text(profile, "Draft scenario. The shared avatar is a visual placeholder and does not yet match every character's age or appearance.", 16);
             Text(profile, "Communication challenge: " + Chapter.initialEmotion);
-            var level = new DropdownField("Difficulty", new System.Collections.Generic.List<string>
-                { "Beginner", "Intermediate", "Advanced" }, difficulty);
-            profile.Add(level);
             var behavior = new Label(ScenarioCatalog.DifficultyBehavior(difficulty));
+            DifficultySelector(profile, () => behavior.text = ScenarioCatalog.DifficultyBehavior(difficulty));
             behavior.style.whiteSpace = WhiteSpace.Normal;
             behavior.style.marginTop = 12;
             profile.Add(behavior);
-            level.RegisterValueChangedCallback(e =>
-            {
-                difficulty = e.newValue;
-                behavior.text = ScenarioCatalog.DifficultyBehavior(difficulty);
-            });
             Text(profile, "Voice practice available. Connect the character on the training screen to begin.", 16);
             var goals = Card(content);
             Text(goals, "Your communication objectives", 23, true);
@@ -284,16 +301,39 @@ namespace RealtimePatient
 
         private void Session()
         {
-            Page(Chapter.title, difficulty + " | Communication practice", false);
+            Page(null, null, false, false);
+            root.style.backgroundImage = new StyleBackground(Resources.Load<Texture2D>("TrainingHospital"));
+            root.style.backgroundSize = new BackgroundSize(BackgroundSizeType.Cover);
+            root.style.backgroundPositionX = new BackgroundPosition(BackgroundPositionKeyword.Center);
+            root.style.backgroundPositionY = new BackgroundPosition(BackgroundPositionKeyword.Bottom);
+            content.style.paddingLeft = 0; content.style.paddingRight = 0;
+            content.style.paddingTop = 0; content.style.paddingBottom = 0;
             sessionVisible = true;
             conversation.ClearReview();
             var row = new VisualElement(); row.style.flexDirection = FlexDirection.Row;
             row.style.flexGrow = 1; row.style.minHeight = 0; content.Add(row);
-            var stage = Card(row); stage.style.flexGrow = 1; stage.style.flexBasis = 0;
+            row.style.position = Position.Absolute;
+            row.style.left = 0; row.style.right = 0; row.style.top = 0; row.style.bottom = 0;
+            var patientView = new VisualElement { pickingMode = PickingMode.Ignore };
+            patientView.style.position = Position.Absolute;
+            patientView.style.left = 0; patientView.style.right = 0;
+            patientView.style.top = 0; patientView.style.bottom = 0;
+            row.Add(patientView);
+            var titleOverlay = new VisualElement { pickingMode = PickingMode.Ignore };
+            titleOverlay.style.position = Position.Absolute;
+            titleOverlay.style.left = 24; titleOverlay.style.top = 20; titleOverlay.style.right = 360;
+            row.Add(titleOverlay);
+            var stage = Card(row);
+            stage.style.position = Position.Absolute;
+            stage.style.left = 24; stage.style.right = 360; stage.style.bottom = 96; stage.style.flexGrow = 1; stage.style.flexBasis = 0;
             stage.style.minWidth = 0;
-            Text(stage, Chapter.characterName + " | " + Chapter.role, 24, true);
+            stage.style.backgroundColor = Color.clear;
+            stage.style.paddingLeft = 0; stage.style.paddingRight = 0;
+            stage.style.paddingTop = 0; stage.style.paddingBottom = 0;
+            stage.style.marginBottom = 0;
+            Text(titleOverlay, Chapter.characterName + " | " + Chapter.title + " | " + difficulty, 22, true);
             if (patientPreview == null) patientPreview = gameObject.AddComponent<PatientPreview>();
-            if (!patientPreview.Show(stage))
+            if (!patientPreview.Show(patientView))
                 Text(stage, "Patient view unavailable. Open PatientScene with its Patient object and Main Camera.");
             
             {
@@ -302,13 +342,13 @@ namespace RealtimePatient
                 voiceStatus.style.fontSize = 16;
                 var statusArea = new ScrollView();
                 ConfigureMenuScroll(statusArea);
-                statusArea.style.height = 55; statusArea.style.flexShrink = 0;
+                statusArea.style.height = 40; statusArea.style.flexShrink = 0;
                 statusArea.Add(voiceStatus); stage.Add(statusArea);
                 if (captions)
                 {
                     var captionArea = new ScrollView();
                     ConfigureMenuScroll(captionArea);
-                    captionArea.style.height = 55;
+                    captionArea.style.height = 40;
                     captionArea.style.flexShrink = 0;
                     patientCaption = new Label(Chapter.ParticipantLabel + " captions will appear here.");
                     patientCaption.style.whiteSpace = WhiteSpace.Normal;
@@ -345,8 +385,13 @@ namespace RealtimePatient
                 controls.Add(speakButton);
             }
 
-            var checklist = Card(row); checklist.style.width = Length.Percent(32);
-            checklist.style.maxWidth = 390; checklist.style.minWidth = 260;
+            var checklist = Card(row); checklist.style.width = Length.Percent(25);
+            checklist.style.position = Position.Absolute;
+            checklist.style.right = 24; checklist.style.top = 24; checklist.style.bottom = 180;
+            checklist.style.maxWidth = 320; checklist.style.minWidth = 240;
+            checklist.style.backgroundColor = new Color(0.65f, 0.69f, 0.72f, 0.45f);
+            checklist.style.paddingLeft = 16; checklist.style.paddingRight = 16;
+            checklist.style.paddingTop = 16; checklist.style.paddingBottom = 16;
             checklist.style.flexShrink = 0; checklist.style.marginLeft = 20;
             Text(checklist, "Communication objectives", 23, true);
             objectiveStatus = new Label("Completion tracking uses learner transcript evidence. Quality scoring is separate.");
@@ -390,7 +435,7 @@ namespace RealtimePatient
             {
                 var coachingArea = new ScrollView();
                 ConfigureMenuScroll(coachingArea);
-                coachingArea.style.height = 130; coachingArea.style.flexShrink = 0;
+                coachingArea.style.height = 96; coachingArea.style.flexShrink = 0;
                 coachingStatus = new Label(); coachingStatus.style.fontSize = 13;
                 coachingStatus.style.whiteSpace = WhiteSpace.Normal;
                 coachingText = new Label("Brief feedback will appear here between turns.");
@@ -408,6 +453,8 @@ namespace RealtimePatient
                 retry.style.height = 30; checklist.Add(retry);
             }
             var navigation = new VisualElement(); navigation.style.flexDirection = FlexDirection.Row;
+            navigation.style.position = Position.Absolute;
+            navigation.style.left = 24; navigation.style.right = 24; navigation.style.bottom = 16;
             navigation.style.flexShrink = 0; content.Add(navigation);
             pauseButton = Action(navigation, "Pause", () => conversation.TogglePause());
             Action(navigation, "End Session | Review", () => RequestNavigation(Summary, "End and Review", false));
