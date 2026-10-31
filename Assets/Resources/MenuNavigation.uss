@@ -1,0 +1,212 @@
+/* Transparent text controls; borders and an offset lower edge create depth on hover. */
+.menu-action {
+    height: 76px;
+    margin-top: 18px;
+    margin-bottom: 12px;
+    padding-left: 12px;
+    padding-right: 12px;
+    background-image: none;
+    background-color: rgba(255, 255, 255, 0);
+    color: rgb(0, 0, 0);
+    font-size: 28px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    white-space: normal;
+    border-width: 2px;
+    border-color: rgba(130, 205, 216, 0);
+    border-radius: 10px;
+    translate: 0 0;
+    scale: 1 1;
+    transition-property: translate, scale, background-color, border-color, color;
+    transition-duration: 220ms;
+    transition-timing-function: ease-out;
+}
+.menu-action-depth {
+    position: absolute;
+    left: -2px;
+    right: -2px;
+    top: 4px;
+    bottom: -8px;
+    border-left-width: 1px;
+    border-right-width: 1px;
+    border-bottom-width: 4px;
+    border-color: rgba(58, 136, 153, 0.45);
+    border-radius: 10px;
+    opacity: 0;
+    scale: 0.92 0.8;
+    transition-property: opacity, scale;
+    transition-duration: 220ms;
+    transition-timing-function: ease-out;
+}
+.menu-action:hover, .menu-action:focus {
+    background-color: rgba(255, 255, 255, 0.65);
+    border-color: rgba(143, 219, 230, 0.95);
+    color: rgb(0, 0, 0);
+    translate: 0 -8px;
+    scale: 1.035 1.035;
+}
+.menu-action:hover .menu-action-depth, .menu-action:focus .menu-action-depth {
+    opacity: 1;
+    scale: 1 1;
+}
+.menu-action:active {
+    translate: 0 -2px;
+    scale: 1.01 1.01;
+    transition-duration: 80ms;
+}
+.menu-view {
+    margin: 24px;
+    background-color: rgba(150, 160, 167, 0.40);
+    border-radius: 14px;
+    border-width: 1px;
+    border-color: rgba(255, 255, 255, 0.55);
+}
+.menu-action-compact {
+    height: 56px;
+    min-height: 40px;
+    flex-shrink: 0;
+    margin-top: 8px;
+    margin-bottom: 12px;
+    font-size: 22px;
+}
+.menu-action:disabled {
+    opacity: 0.45;
+    translate: 0 0;
+    scale: 1 1;
+}
+.menu-action:disabled .menu-action-depth {
+    opacity: 0;
+}
+.scroll-reveal-managed {
+    opacity: 0;
+    transition-property: opacity;
+    transition-duration: 280ms;
+    transition-timing-function: ease-out;
+}
+.scroll-reveal-managed.scroll-reveal-visible {
+    opacity: 1;
+}
+/* Keep scroll controls usable while removing the default heavy track and arrows. */
+.menu-scroll .unity-scroller--vertical {
+    width: 8px;
+    margin-left: 6px;
+    background-color: rgba(255, 255, 255, 0);
+}
+.menu-scroll .unity-scroller--horizontal {
+    height: 8px;
+    background-color: rgba(255, 255, 255, 0);
+}
+.menu-scroll .unity-scroller .unity-repeat-button {
+    display: none;
+}
+.menu-scroll .unity-scroller .unity-base-slider {
+    flex-grow: 1;
+    margin: 0;
+}
+.menu-scroll .unity-scroller #unity-tracker {
+    background-color: rgba(70, 96, 108, 0.06);
+    border-width: 0;
+    border-radius: 4px;
+}
+.menu-scroll .unity-scroller #unity-dragger {
+    background-image: none;
+    background-color: rgba(60, 89, 102, 0.28);
+    border-width: 0;
+    border-radius: 4px;
+    min-height: 28px;
+    transition-property: background-color;
+    transition-duration: 180ms;
+}
+.menu-scroll .unity-scroller #unity-dragger:hover,
+.menu-scroll .unity-scroller #unity-dragger:active {
+    background-color: rgba(44, 83, 99, 0.60);
+}
+/* Style the field's actual input, which otherwise keeps Unity's default dropdown box. */
+.difficulty-dropdown {
+    margin-left: 0;
+    margin-right: 0;
+    max-width: 520px;
+    flex-shrink: 0;
+}
+.difficulty-dropdown .unity-base-field__input {
+    background-image: none;
+    background-color: rgba(255, 255, 255, 0);
+    border-radius: 10px;
+    padding-left: 20px;
+    padding-right: 16px;
+}
+.difficulty-dropdown .unity-base-popup-field__text {
+    color: rgb(0, 0, 0);
+    font-size: 22px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    flex-grow: 1;
+}
+.difficulty-dropdown:focus .unity-base-field__input,
+.difficulty-dropdown .unity-base-field__input:hover {
+    background-color: rgba(255, 255, 255, 0.65);
+    border-color: rgba(143, 219, 230, 0.95);
+    translate: 0 -8px;
+    scale: 1.035 1.035;
+}
+.unity-base-dropdown__container-outer {
+    background-color: rgba(214, 222, 226, 0.97);
+    border-color: rgba(143, 219, 230, 0.95);
+    border-width: 1px;
+    border-radius: 10px;
+    padding: 6px;
+}
+.unity-base-dropdown__item {
+    min-height: 48px;
+    background-color: rgba(255, 255, 255, 0);
+    border-radius: 8px;
+    padding-left: 16px;
+    padding-right: 16px;
+}
+.unity-base-dropdown__label {
+    color: rgb(0, 0, 0);
+    font-size: 22px;
+    -unity-font-style: bold;
+}
+.unity-base-dropdown__item:hover,
+.unity-base-dropdown__item:checked {
+    background-color: rgba(255, 255, 255, 0.65);
+}
+/* Match the action buttons' 220ms lift and press animation on the field and choices. */
+.difficulty-dropdown:focus .menu-action-depth {
+    opacity: 1;
+    scale: 1 1;
+}
+.difficulty-dropdown .unity-base-field__input:active {
+    translate: 0 -2px;
+    scale: 1.01 1.01;
+    transition-duration: 80ms;
+}
+.unity-base-dropdown__container-outer {
+    padding: 16px;
+}
+.unity-base-dropdown__item {
+    margin-top: 8px;
+    margin-bottom: 8px;
+    border-width: 2px;
+    border-bottom-width: 4px;
+    border-color: rgba(130, 205, 216, 0);
+    translate: 0 0;
+    scale: 1 1;
+    transition-property: translate, scale, background-color, border-color;
+    transition-duration: 220ms;
+    transition-timing-function: ease-out;
+}
+.unity-base-dropdown__item:hover,
+.unity-base-dropdown__item:focus {
+    background-color: rgba(255, 255, 255, 0.65);
+    border-color: rgba(143, 219, 230, 0.95);
+    border-bottom-color: rgba(58, 136, 153, 0.65);
+    translate: 0 -8px;
+    scale: 1.035 1.035;
+}
+.unity-base-dropdown__item:active {
+    translate: 0 -2px;
+    scale: 1.01 1.01;
+    transition-duration: 80ms;
+}

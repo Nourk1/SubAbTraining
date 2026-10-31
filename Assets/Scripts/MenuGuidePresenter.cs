@@ -12,6 +12,9 @@ namespace RealtimePatient
         private Camera portraitCamera;
         private Animator animator;
         private RenderTexture portrait;
+        private Bounds characterBounds;
+        [SerializeField, Range(0f, 0.9f), Tooltip("Fraction of the model height cropped below the menu portrait.")]
+        private float shoulderCrop = 0.15f;
         private bool greeted;
         private bool canWave;
         private float nextWave;
@@ -20,7 +23,8 @@ namespace RealtimePatient
         {
             if (stage == null)
             {
-                var prefab = replacement != null ? replacement : Resources.Load<GameObject>("MenuGuide");
+                var prefab = replacement != null ? replacement :
+                    Resources.Load<GameObject>("MenuAvatar/MenuAvatar") ?? Resources.Load<GameObject>("MenuGuide");
                 if (prefab == null) return false;
                 stage = new GameObject("Menu Guide Stage");
                 stage.transform.SetParent(transform, false);
@@ -35,7 +39,7 @@ namespace RealtimePatient
                 portraitCamera = cameraObject.AddComponent<Camera>();
                 portraitCamera.cullingMask = 1 << 31;
                 portraitCamera.clearFlags = CameraClearFlags.SolidColor;
-                portraitCamera.backgroundColor = new Color(0.87f, 0.94f, 0.93f);
+                portraitCamera.backgroundColor = Color.clear;
                 portraitCamera.fieldOfView = 30; portraitCamera.nearClipPlane = 0.05f;
                 var renderers = character.GetComponentsInChildren<Renderer>();
                 var bounds = new Bounds(stage.transform.position + Vector3.up, Vector3.one);
@@ -44,31 +48,51 @@ namespace RealtimePatient
                     bounds = renderers[0].bounds;
                     foreach (var renderer in renderers) bounds.Encapsulate(renderer.bounds);
                 }
-                Vector3 focus = bounds.center + Vector3.up * bounds.size.y * 0.20f;
-                float distance = Mathf.Max(0.35f, bounds.size.y * 0.34f) / Mathf.Tan(15 * Mathf.Deg2Rad);
-                portraitCamera.farClipPlane = Mathf.Max(15, distance * 4);
-                portraitCamera.transform.position = focus + Vector3.forward * distance;
-                portraitCamera.transform.LookAt(focus);
-                portrait = new RenderTexture(768, 960, 24) { name = "Menu Guide Portrait" };
+                characterBounds = bounds;
+                FrameCharacter(768f / 960f);
+                portrait = new RenderTexture(768, 960, 24, RenderTextureFormat.ARGB32) { name = "Menu Guide Portrait" };
                 portrait.Create(); portraitCamera.targetTexture = portrait;
                 AddLight("Guide Key Light", new Vector3(30, 180, 0), 0.9f);
                 AddLight("Guide Fill Light", new Vector3(15, 320, 0), 0.35f);
             }
             stage.SetActive(true);
-            var image = new Image { image = portrait, scaleMode = ScaleMode.ScaleToFit };
-            image.style.height = 340; image.style.flexShrink = 0;
+            var image = new Image { image = portrait, scaleMode = ScaleMode.StretchToFill, pickingMode = PickingMode.Ignore };
+            image.style.flexGrow = 1; image.style.flexBasis = 0; image.style.minHeight = 0;
             image.style.backgroundColor = portraitCamera.backgroundColor;
             container.Add(image);
             image.RegisterCallback<GeometryChangedEvent>(evt =>
             {
                 if (portrait == null || evt.newRect.width < 1 || evt.newRect.height < 1) return;
-                int width = Mathf.Clamp(Mathf.RoundToInt(960 * evt.newRect.width / evt.newRect.height), 256, 1536);
-                if (width == portrait.width) return;
-                portraitCamera.targetTexture = null; portrait.Release(); portrait.width = width; portrait.Create();
+                float aspect = evt.newRect.width / evt.newRect.height;
+                FrameCharacter(aspect);
+                float resolutionScale = Mathf.Min(1f, 2048f / Mathf.Max(evt.newRect.width, evt.newRect.height));
+                int width = Mathf.Max(1, Mathf.RoundToInt(evt.newRect.width * resolutionScale));
+                int height = Mathf.Max(1, Mathf.RoundToInt(evt.newRect.height * resolutionScale));
+                if (width == portrait.width && height == portrait.height) return;
+                portraitCamera.targetTexture = null;
+                portrait.Release(); portrait.width = width; portrait.height = height; portrait.Create();
                 portraitCamera.targetTexture = portrait;
             });
             if (!greeted) { greeted = true; StartCoroutine(Greet()); }
             return true;
+        }
+        private void FrameCharacter(float aspect)
+        {
+            // Anchor a cropped bust to the bottom edge rather than fitting the whole model.
+            // Orthographic projection keeps that edge fixed regardless of mesh depth.
+            float cropY = characterBounds.min.y + characterBounds.size.y * shoulderCrop;
+            float portraitHeight = Mathf.Max(0.01f, characterBounds.max.y - cropY);
+            float halfHeight = portraitHeight * 0.56f;
+            halfHeight = Mathf.Max(halfHeight, characterBounds.extents.x * 0.65f / Mathf.Max(0.01f, aspect));
+            portraitCamera.orthographic = true;
+            portraitCamera.orthographicSize = halfHeight;
+            float distance = Mathf.Max(1f, characterBounds.size.magnitude * 2f);
+            portraitCamera.nearClipPlane = 0.001f;
+            portraitCamera.farClipPlane = distance + characterBounds.size.magnitude * 2f + 1f;
+            var focus = characterBounds.center;
+            focus.y = cropY + halfHeight;
+            portraitCamera.transform.position = focus + Vector3.forward * distance;
+            portraitCamera.transform.LookAt(focus);
         }
         private void AddLight(string title, Vector3 rotation, float intensity)
         {

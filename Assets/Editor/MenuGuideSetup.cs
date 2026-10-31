@@ -24,10 +24,47 @@ namespace RealtimePatient.Editor
             if (state == PlayModeStateChange.EnteredEditMode) EditorApplication.delayCall += EnsureAssets;
         }
 
+        private static void EnsureImportedAvatar()
+        {
+            const string folder = "Assets/Resources/MenuAvatar/";
+            const string avatarPath = folder + "MenuAvatar.prefab";
+            if (AssetDatabase.LoadAssetAtPath<GameObject>(avatarPath) != null) return;
+            var model = AssetDatabase.LoadAssetAtPath<GameObject>(folder + "base_basic_pbr.fbx");
+            var texture = AssetDatabase.LoadAssetAtPath<Texture2D>(folder + "texture_diffuse.png");
+            if (model == null || texture == null) return;
+            var shader = Shader.Find("Universal Render Pipeline/Lit");
+            if (shader == null) return;
+            const string materialPath = folder + "MenuAvatar.mat";
+            var material = AssetDatabase.LoadAssetAtPath<Material>(materialPath);
+            if (material == null)
+            {
+                material = new Material(shader) { name = "Menu Avatar" };
+                material.SetTexture("_BaseMap", texture);
+                material.SetColor("_BaseColor", Color.white);
+                material.SetFloat("_Smoothness", 0.25f);
+                AssetDatabase.CreateAsset(material, materialPath);
+            }
+            var preview = EditorSceneManager.NewPreviewScene();
+            try
+            {
+                var root = new GameObject("MenuAvatar");
+                SceneManager.MoveGameObjectToScene(root, preview);
+                var character = (GameObject)PrefabUtility.InstantiatePrefab(model, preview);
+                character.transform.SetParent(root.transform, false);
+                foreach (var renderer in character.GetComponentsInChildren<Renderer>(true))
+                    renderer.sharedMaterials = Enumerable.Repeat(material, renderer.sharedMaterials.Length).ToArray();
+                // Retargeted animation requires a compatible rig; retain the imported pose for now.
+                PrefabUtility.SaveAsPrefabAsset(root, avatarPath);
+                AssetDatabase.SaveAssets();
+                Debug.Log("Main menu avatar prepared from MenuAvatar/base_basic_pbr.fbx.");
+            }
+            finally { EditorSceneManager.ClosePreviewScene(preview); }
+        }
         [MenuItem("Capstone/Create Menu Guide Assets")]
         public static void EnsureAssets()
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode) return;
+            EnsureImportedAvatar();
             // Preserve a replacement prefab or controller supplied by the team later.
             if (AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath) != null) return;
             var model = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Characters/nurse.fbx");
